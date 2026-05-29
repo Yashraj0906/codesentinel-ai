@@ -1,0 +1,85 @@
+# ============================================================
+# docker-compose.yml -- Run everything with one command
+# ============================================================
+# HOW TO USE:
+#   docker-compose up        (run in foreground)
+#   docker-compose up -d     (run in background)
+#   docker-compose down      (stop everything)
+#
+# WHAT THIS STARTS:
+#   1. PostgreSQL  (database)       -- port 5432
+#   2. Redis       (cache)          -- port 6379
+#   3. Qdrant      (vector store)   -- port 6333
+#   4. FastAPI     (backend)        -- port 8000
+#   5. Streamlit   (frontend)       -- port 8501
+# ============================================================
+
+services:
+  # ── PostgreSQL Database ──
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: codesentinel
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: codesentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codesentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis Cache ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Qdrant Vector Database ──
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # ── FastAPI Backend ──
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://codesentinel:password@postgres:5432/codesentinel
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+  # ── Streamlit Frontend ──
+  ui:
+    build: .
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    command: streamlit run ui/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+
+volumes:
+  postgres_data:
+  qdrant_data:

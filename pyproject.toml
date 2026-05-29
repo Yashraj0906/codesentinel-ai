@@ -1,0 +1,32 @@
+[project]
+name = "codesentinel-ai"
+version = "1.0.0"
+description = "AI-powered code review and codebase onboarding platform"
+requires-python = ">=3.11"
+
+dependencies = [
+    "groq",
+    "python-dotenv",
+    "pydantic-settings",
+    "unidiff",
+    "sentence-transformers",
+    "qdrant-client",
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy",
+    "asyncpg",
+    "redis",
+    "langgraph",
+    "langsmith",
+    "streamlit",
+    "gitpython",
+    "httpx",
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
