@@ -66,7 +66,6 @@ The review pipeline has 6 stages:
 | Embeddings | Sentence Transformers (BGE-small-en) | Lightweight, 384-dim vectors, runs locally |
 | Vector DB | Qdrant | Dense vector search for RAG |
 | Cache | Redis | Cache expensive LLM calls |
-| Database | PostgreSQL + SQLAlchemy | Persistent storage for users and reviews |
 | Backend | FastAPI | Async Python API with auto-generated docs |
 | Frontend | Streamlit | Rapid prototyping for data/ML apps |
 | Deployment | Docker Compose | Single command to run all 5 services |
@@ -281,7 +280,6 @@ codesentinel-ai/
 |
 |-- images/                          # Architecture diagrams
 |-- docs/                            # Documentation
-|-- data/                            # Placeholder for CWE data files
 |-- docker-compose.yml               # Run all services
 |-- Dockerfile                       # Container build
 |-- pyproject.toml                   # Python dependencies
@@ -368,7 +366,7 @@ LLM generates answer with specific file/line references
 - GitHub PR webhook integration for automated reviews
 - VS Code extension for inline bug detection
 - Full CWE database (1000+ entries) for security scanning
-- User authentication with JWT
+- User authentication and review history with PostgreSQL
 - Deployment to cloud (AWS/Railway/Render)
 
 ---
