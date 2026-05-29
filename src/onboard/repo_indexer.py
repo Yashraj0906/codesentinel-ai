@@ -1,18 +1,3 @@
-# ============================================================
-# repo_indexer.py -- Clones and indexes a GitHub repository
-# ============================================================
-# WHY THIS EXISTS:
-# This is the ENTRY POINT for onboarding. When someone pastes
-# a GitHub repo URL, this file:
-#   1. Clones the repo
-#   2. Chunks all Python files
-#   3. Builds the call graph
-#   4. Generates summaries (auto-documenter)
-#   5. Stores everything in Qdrant
-#
-# After indexing, the QA agent can answer questions about it.
-# ============================================================
-
 import os
 import shutil
 import tempfile
@@ -25,15 +10,7 @@ from src.shared.vector_store import VectorStore
 
 
 class RepoIndexer:
-    """
-    Clones a GitHub repo and indexes it into Qdrant.
-    
-    USAGE:
-        indexer = RepoIndexer()
-        stats = indexer.index_repo("https://github.com/user/repo")
-        print(stats)
-        # {'files': 25, 'chunks': 80, 'graph_nodes': 45}
-    """
+    """Clones a GitHub repo and indexes it into Qdrant for semantic search."""
     
     def __init__(self):
         settings = get_settings()
@@ -44,26 +21,14 @@ class RepoIndexer:
         self.collection = settings.qdrant_collection_code
     
     def index_repo(self, repo_url: str, branch: str = "main") -> dict:
-        """
-        Clone and index a GitHub repository.
-        
-        Steps:
-        1. Clone the repo to a temp directory
-        2. Chunk all Python files into functions/classes
-        3. Build the function call graph
-        4. Auto-generate summaries for each chunk
-        5. Embed and store in Qdrant
-        6. Clean up the temp directory
-        """
+        """Clone and index a GitHub repository into Qdrant."""
         print(f"[*] Indexing repository: {repo_url}")
         
-        # Step 1: Clone
         tmp_dir = tempfile.mkdtemp(prefix="codesentinel_repo_")
         try:
             print("[1/5] Cloning repository...")
             Repo.clone_from(repo_url, tmp_dir, branch=branch, depth=1)
             
-            # Step 2: Chunk
             print("[2/5] Chunking code files...")
             chunks = self.chunker.chunk_directory(tmp_dir)
             
@@ -71,11 +36,9 @@ class RepoIndexer:
                 print("[WARN] No Python files found in repository")
                 return {"files": 0, "chunks": 0, "graph_nodes": 0}
             
-            # Step 3: Build call graph
             print("[3/5] Building call graph...")
             graph = self.graph_builder.build(chunks)
             
-            # Step 4: Auto-document (summaries)
             print("[4/5] Generating documentation...")
             summaries = self.documenter.summarize_batch(chunks)
             

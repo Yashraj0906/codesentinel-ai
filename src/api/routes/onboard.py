@@ -1,11 +1,3 @@
-# ============================================================
-# onboard.py -- Codebase Onboarding API routes
-# ============================================================
-# ENDPOINTS:
-#   POST /onboard/index   -- Index a GitHub repo
-#   POST /onboard/ask     -- Ask a question about the indexed repo
-# ============================================================
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 from src.onboard import RepoIndexer, QAAgent

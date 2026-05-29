@@ -1,18 +1,3 @@
-# ============================================================
-# code_chunker.py -- Splits code files into meaningful chunks
-# ============================================================
-# WHY THIS EXISTS:
-# You can't embed an entire 500-line file as one vector.
-# Instead, you break it into chunks:
-#   - Each function = 1 chunk
-#   - Each class = 1 chunk
-#   - Module-level code = 1 chunk
-#
-# Each chunk has METADATA: file path, function name, docstring,
-# imports, line range. This metadata helps the QA agent give
-# precise answers: "The auth logic is in auth.py, line 45-80"
-# ============================================================
-
 import ast
 import os
 from dataclasses import dataclass, field
@@ -35,14 +20,7 @@ class CodeChunk:
 
 
 class CodeChunker:
-    """
-    Splits Python files into meaningful chunks using AST.
-    
-    USAGE:
-        chunker = CodeChunker()
-        chunks = chunker.chunk_file("src/auth/login.py", file_content)
-        # Returns list of CodeChunk objects
-    """
+    """Splits Python files into semantic chunks (functions, classes, modules) using AST."""
     
     def chunk_file(self, file_path: str, code: str) -> list[CodeChunk]:
         """

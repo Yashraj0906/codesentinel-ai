@@ -1,12 +1,3 @@
-# ============================================================
-# evaluation/benchmark.py -- Run evaluation on test cases
-# ============================================================
-# RUN: python -m src.evaluation.benchmark
-#
-# This runs the bug detector on 10 test cases with known bugs,
-# then calculates precision, recall, and F1 score.
-# ============================================================
-
 from src.review.diff_analyzer import DiffAnalyzer
 from src.review.bug_detector import BugDetector
 from src.evaluation.metrics import calculate_metrics, EvalResult

@@ -1,18 +1,3 @@
-# ============================================================
-# review.py -- Code Review API routes
-# ============================================================
-# ENDPOINTS:
-#   POST /review/analyze   -- Submit code for review
-#   GET  /review/{id}      -- Get a specific review result
-#
-# HOW FASTAPI ROUTES WORK:
-# 1. You define a function with a decorator (@router.post)
-# 2. FastAPI automatically:
-#    - Validates the request body (using Pydantic models)
-#    - Converts Python dict to JSON response
-#    - Generates API documentation at /docs
-# ============================================================
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 from src.review import CodeReviewPipeline
@@ -57,7 +42,6 @@ async def analyze_code(request: ReviewRequest):
     and gets back a full review report with bugs, fixes, and costs.
     """
     # Run the pipeline in a thread so it doesn't block the async event loop.
-    # Without this, the server freezes for ~80 seconds and the request times out.
     def _run_pipeline():
         pipeline = CodeReviewPipeline()
         return pipeline.review_code(request.code, request.file_path)

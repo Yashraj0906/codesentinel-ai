@@ -1,17 +1,3 @@
-# ============================================================
-# graph_builder.py -- Builds a function call graph
-# ============================================================
-# WHY THIS EXISTS:
-# When someone asks "How does login work?", you don't want to
-# just return the login() function. You want to show:
-#   login() -> validate_credentials() -> hash_password()
-#                                     -> check_rate_limit()
-#            -> create_session() -> generate_token()
-#
-# This "call graph" shows the FLOW of the code.
-# The QA agent uses it to provide complete answers.
-# ============================================================
-
 from dataclasses import dataclass, field
 from src.onboard.code_chunker import CodeChunk
 
@@ -26,25 +12,7 @@ class CallGraphNode:
 
 
 class GraphBuilder:
-    """
-    Builds a call graph from code chunks.
-    
-    WHAT IS A CALL GRAPH:
-    A map of "who calls who":
-      login() -> validate_credentials() -> hash_password()
-    
-    WHY IT MATTERS:
-    When someone asks about a function, you can trace
-    its FULL dependency chain — not just the function itself.
-    
-    USAGE:
-        builder = GraphBuilder()
-        graph = builder.build(chunks)
-        
-        # Get everything login() calls:
-        chain = builder.get_call_chain("login", graph, depth=3)
-        # Returns: ["login", "validate_credentials", "hash_password", ...]
-    """
+    """Builds function call graphs from code chunks to trace dependency chains."""
     
     def build(self, chunks: list[CodeChunk]) -> dict[str, CallGraphNode]:
         """
@@ -53,7 +21,6 @@ class GraphBuilder:
         """
         graph = {}
         
-        # Step 1: Create a node for each chunk
         for chunk in chunks:
             if chunk.chunk_type in ("function", "class"):
                 graph[chunk.name] = CallGraphNode(
@@ -62,7 +29,6 @@ class GraphBuilder:
                     calls=chunk.calls,
                 )
         
-        # Step 2: Build reverse edges (called_by)
         # For each function A that calls B, add A to B's called_by list
         all_names = set(graph.keys())
         for name, node in graph.items():

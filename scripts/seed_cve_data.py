@@ -1,18 +1,3 @@
-# ============================================================
-# seed_cve_data.py — Loads CWE data into Qdrant
-# ============================================================
-# RUN THIS ONCE before using the security scanner:
-#   python -m scripts.seed_cve_data
-#
-# WHAT IT DOES:
-# 1. Takes CWE vulnerability descriptions (hardcoded below)
-# 2. Converts each to a vector using embeddings
-# 3. Stores them in Qdrant's "cve_vulnerabilities" collection
-#
-# After this, the security scanner can search:
-#   "Find vulnerabilities similar to this code pattern"
-# ============================================================
-
 from src.shared.vector_store import VectorStore
 from src.config import get_settings
 
@@ -190,7 +175,6 @@ def seed():
     settings = get_settings()
     vs = VectorStore()
     
-    # Create the collection
     vs.create_collection(settings.qdrant_collection_cve, dimension=settings.embedding_dimension)
     
     # Insert all CWE entries

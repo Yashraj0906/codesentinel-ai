@@ -1,22 +1,7 @@
-# ============================================================
-# diff_analyzer.py — Parses code and extracts functions
-# ============================================================
-# WHY THIS EXISTS:
-# When someone submits code for review, you don't want to dump
-# the entire file into the LLM. Instead:
-#   1. Parse the code using Python's AST (Abstract Syntax Tree)
-#   2. Extract each function/class separately
-#   3. Feed each function to the bug detector individually
-#
-# WHAT IS AST:
-# AST converts your code from text into a tree structure.
-#   def add(a, b):
-#       return a + b
-# Becomes:
-#   FunctionDef(name='add', args=['a','b'], body=[Return(a+b)])
-#
-# This lets you UNDERSTAND code structure, not just read text.
-# ============================================================
+"""
+AST-based code parser that extracts individual functions from submitted code.
+Supports both raw code input and unified git diff format.
+"""
 
 import ast
 import re
@@ -26,67 +11,41 @@ from unidiff import PatchSet
 
 @dataclass
 class FunctionChange:
-    """
-    Represents one function/method found in the code.
-    Each of these gets sent to the bug detector separately.
-    """
-    name: str               # Function name (e.g., "get_user")
-    file_path: str           # Which file it's in
-    start_line: int          # Where it starts
-    end_line: int            # Where it ends
-    code: str                # The actual code of this function
-    change_type: str         # "added" | "modified" | "deleted"
-    docstring: str | None = None  # Function's docstring if it has one
+    """Represents one extracted function/method."""
+    name: str
+    file_path: str
+    start_line: int
+    end_line: int
+    code: str
+    change_type: str
+    docstring: str | None = None
 
 
 @dataclass
 class DiffAnalysis:
-    """
-    Complete analysis result. Contains everything the bug detector needs.
-    """
-    files_changed: list[str]              # List of file paths
-    lines_added: int                       # Total lines added
-    lines_removed: int                     # Total lines removed
-    functions_changed: list[FunctionChange]  # Individual functions found
-    change_type: str                       # "feature" | "bugfix" | "test" | "config"
-    risk_level: str                        # "low" | "medium" | "high"
-    raw_diff: str                          # The original input
+    """Complete parsing result with extracted functions and metadata."""
+    files_changed: list[str]
+    lines_added: int
+    lines_removed: int
+    functions_changed: list[FunctionChange]
+    change_type: str
+    risk_level: str
+    raw_diff: str
 
 
 class DiffAnalyzer:
-    """
-    Analyzes code to extract functions and assess risk.
+    """Parses code or diffs to extract functions for analysis."""
     
-    TWO WAYS TO USE:
-    1. parse_diff(diff_text)   → for git diff input
-    2. parse_code(code_string) → for raw code input (simpler, used more often)
-    """
-    
-    # Files that touch these areas = HIGH RISK
-    # Why? A bug in auth/payment can cause real damage
     HIGH_RISK_PATTERNS = [
         r"auth", r"login", r"password", r"payment", r"billing",
         r"migration", r"security", r"crypto", r"token",
     ]
     
     def parse_diff(self, diff_text: str) -> DiffAnalysis:
-        """
-        Parse a unified git diff string.
-        
-        WHAT IS A UNIFIED DIFF:
-        When you run `git diff`, you get something like:
-            --- a/app.py
-            +++ b/app.py
-            @@ -10,5 +10,7 @@
-            +def new_function():
-            +    return "hello"
-        
-        The `unidiff` library turns this into structured data.
-        """
+        """Parse a unified git diff and extract changed functions."""
         try:
             patch = PatchSet(diff_text)
         except Exception:
-            # If it's not a valid diff, treat as raw code
             return self.parse_code(diff_text)
         
         files_changed = []
@@ -100,14 +59,12 @@ class DiffAnalyzer:
             total_added += patched_file.added
             total_removed += patched_file.removed
             
-            # Extract the added code from the diff
             added_code = ""
             for hunk in patched_file:
                 for line in hunk:
                     if line.is_added:
                         added_code += line.value
             
-            # If it's a Python file, extract functions using AST
             if file_path.endswith(".py") and added_code.strip():
                 functions = self._extract_functions(added_code, file_path)
                 all_functions.extend(functions)
@@ -123,12 +80,7 @@ class DiffAnalyzer:
         )
     
     def parse_code(self, code: str, file_path: str = "submitted_code.py") -> DiffAnalysis:
-        """
-        Parse a raw code string (not a diff).
-        This is the simpler, more commonly used method.
-        
-        Use this when someone pastes code directly into the UI.
-        """
+        """Parse raw code string and extract functions using AST."""
         functions = self._extract_functions(code, file_path)
         
         return DiffAnalysis(
@@ -142,27 +94,12 @@ class DiffAnalyzer:
         )
     
     def _extract_functions(self, code: str, file_path: str) -> list[FunctionChange]:
-        """
-        Use Python's AST to find all functions in the code.
-        
-        THIS IS THE KEY DIFFERENTIATOR:
-        - Tutorial approach: regex to find "def " → breaks on edge cases
-        - Production approach: AST parsing → understands nested functions,
-          decorators, async functions, classes, everything
-        
-        HOW IT WORKS:
-        1. ast.parse(code) → converts code string to a tree
-        2. ast.walk(tree) → visits every node in the tree
-        3. Find FunctionDef and AsyncFunctionDef nodes
-        4. Extract name, code, docstring from each
-        """
+        """Use AST to extract all function/method definitions from code."""
         functions = []
         
         try:
             tree = ast.parse(code)
         except SyntaxError:
-            # Code might be invalid Python (partial diff, other language)
-            # In that case, treat the whole code as one "function"
             if code.strip():
                 functions.append(FunctionChange(
                     name="<unparseable>",
@@ -178,7 +115,6 @@ class DiffAnalyzer:
         
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Extract the function's source code from line numbers
                 func_code = "\n".join(lines[node.lineno - 1 : node.end_lineno])
                 
                 functions.append(FunctionChange(
@@ -191,7 +127,6 @@ class DiffAnalyzer:
                     docstring=ast.get_docstring(node),
                 ))
         
-        # If no functions found but code exists, treat whole code as one chunk
         if not functions and code.strip():
             functions.append(FunctionChange(
                 name="<module_level>",
@@ -205,10 +140,7 @@ class DiffAnalyzer:
         return functions
     
     def _classify_change(self, files: list[str]) -> str:
-        """
-        Guess what type of change this is based on file paths.
-        Used for reporting — "This looks like a test change"
-        """
+        """Classify change type based on file paths."""
         file_str = " ".join(files).lower()
         
         if any(f.startswith("test") or "/test" in f for f in files):
@@ -220,23 +152,14 @@ class DiffAnalyzer:
         return "feature"
     
     def _assess_risk(self, files: list[str], total_changes: int) -> str:
-        """
-        Assess how risky this change is.
-        
-        WHY:
-        - Changes to auth.py → high risk (security implications)
-        - Changes to tests/ → low risk (can't break production)
-        - 500 lines changed → high risk (too much to review carefully)
-        """
+        """Assess risk level based on file sensitivity and change size."""
         file_str = " ".join(files).lower()
         
-        # High risk: security-sensitive files or very large changes
         if any(re.search(p, file_str) for p in self.HIGH_RISK_PATTERNS):
             return "high"
         if total_changes > 200:
             return "high"
         
-        # Medium risk: business logic
         if any(p in file_str for p in ["service", "handler", "api", "route"]):
             return "medium"
         if total_changes > 50:

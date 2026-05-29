@@ -1,10 +1,3 @@
-# ============================================================
-# streamlit_app.py -- Premium Frontend UI
-# ============================================================
-# HOW TO RUN:
-#   streamlit run ui/streamlit_app.py
-# ============================================================
-
 import streamlit as st
 import httpx
 import time
@@ -202,9 +195,6 @@ st.markdown("""
 tab1, tab2 = st.tabs(["  Code Review  ", "  Codebase Q&A  "])
 
 
-# ============================================================
-# TAB 1: CODE REVIEW
-# ============================================================
 with tab1:
     # Two columns: code input + example selector
     col_main, col_side = st.columns([3, 1])
@@ -410,9 +400,6 @@ def greet(name: str) -> str:
         st.warning("Please paste some code or select an example from the dropdown.")
 
 
-# ============================================================
-# TAB 2: CODEBASE Q&A
-# ============================================================
 with tab2:
     st.markdown("### Codebase Onboarding Agent")
     st.markdown("Index a GitHub repository and ask questions about the code. New joinees can instantly understand any codebase.")

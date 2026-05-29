@@ -1,15 +1,3 @@
-# ============================================================
-# evaluation/metrics.py -- Evaluation metrics
-# ============================================================
-# WHY THIS EXISTS:
-# When you say "my tool finds bugs", interviewers ask:
-#   "How well? What's the precision? What's the recall?"
-#
-# This file calculates those numbers so you can say:
-#   "Precision: 85% (few false positives)"
-#   "Recall: 78% (catches most real bugs)"
-# ============================================================
-
 from dataclasses import dataclass
 
 

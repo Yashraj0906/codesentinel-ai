@@ -1,18 +1,3 @@
-# ============================================================
-# review/__init__.py — The main code review pipeline
-# ============================================================
-# This is the ENTRY POINT for Module 1.
-# It orchestrates all agents in sequence:
-#
-#   Code → Analyze → Detect bugs → Security scan → Fix → Test → Report
-#
-# USAGE:
-#   from src.review import CodeReviewPipeline
-#   pipeline = CodeReviewPipeline()
-#   report = pipeline.review_code("def get_user(id): ...")
-#   print(report.summary)
-# ============================================================
-
 import time
 from src.review.diff_analyzer import DiffAnalyzer
 from src.review.bug_detector import BugDetector

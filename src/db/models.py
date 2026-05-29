@@ -1,16 +1,3 @@
-# ============================================================
-# models.py -- Database tables (SQLAlchemy models)
-# ============================================================
-# WHAT ARE MODELS:
-# Each class below = one table in PostgreSQL.
-# SQLAlchemy converts Python classes into SQL tables:
-#   class User -> CREATE TABLE users (id, email, password_hash, ...)
-#
-# WHY:
-# You need to store: users, reviews, chat history.
-# Without a database, all data is lost when the server restarts.
-# ============================================================
-
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, DateTime, Text, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import DeclarativeBase, relationship

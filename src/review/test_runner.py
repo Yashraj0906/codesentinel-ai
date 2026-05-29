@@ -1,24 +1,3 @@
-# ============================================================
-# test_runner.py — Self-healing test loop
-# ============================================================
-# THIS IS THE MOST IMPRESSIVE PART OF YOUR PROJECT.
-#
-# The flow:
-#   1. Apply the fix to the code
-#   2. Run tests in a sandboxed subprocess
-#   3. Tests PASS → great, accept the fix
-#   4. Tests FAIL → read the error message
-#   5. Send error + original fix to LLM: "Your fix broke this. Fix it."
-#   6. LLM generates a revised fix
-#   7. Go back to step 2 (max 3 attempts)
-#   8. All 3 fail → flag for human review
-#
-# WHY SANDBOXED:
-# You're running UNTRUSTED code. If the fix has an infinite loop
-# or tries to delete files, the sandbox (subprocess with timeout)
-# protects your system.
-# ============================================================
-
 import subprocess
 import tempfile
 import os
@@ -49,19 +28,7 @@ class SelfHealResult:
 
 
 class TestRunner:
-    """
-    Runs tests on proposed fixes with self-healing.
-    
-    USAGE:
-        runner = TestRunner()
-        result = runner.run_with_self_heal(fix, original_code)
-        if result.success:
-            print("Fix works! Apply it.")
-        else:
-            print("All attempts failed. Needs human review.")
-            for log in result.heal_log:
-                print(log)
-    """
+    """Runs fixes in a sandbox and retries failed fixes via LLM self-healing."""
     
     def __init__(self):
         settings = get_settings()
@@ -137,17 +104,7 @@ class TestRunner:
         return original_code
     
     def _run_test(self, code: str, test_code: str) -> TestResult:
-        """
-        Run test in a sandboxed subprocess.
-        
-        HOW SANDBOXING WORKS:
-        1. Create a temporary directory (isolated from your system)
-        2. Write the code and test as files there
-        3. Run pytest via subprocess (separate process)
-        4. Set a timeout (30 sec) — kills infinite loops
-        5. Capture output and errors
-        6. Delete the temp directory
-        """
+        """Run test in a sandboxed subprocess with timeout."""
         tmp_dir = tempfile.mkdtemp(prefix="codesentinel_")
         
         try:
@@ -236,12 +193,7 @@ Return ONLY Python code, no explanation. Start with imports."""
         return test_code.strip()
     
     def _self_heal(self, failed_fix: CodeFix, test_result: TestResult, original_code: str) -> CodeFix:
-        """
-        THE SELF-HEALING CORE:
-        When a fix fails tests, analyze the error and generate a better fix.
-        
-        "Your fix broke this test. Here's the error. Try again."
-        """
+        """Analyze test failure and generate a revised fix using LLM."""
         prompt = f"""A code fix I generated failed its tests. Help me fix it.
 
 ORIGINAL BUG:

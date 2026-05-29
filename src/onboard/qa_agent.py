@@ -1,19 +1,3 @@
-# ============================================================
-# qa_agent.py -- Answers questions about an indexed codebase
-# ============================================================
-# WHY THIS EXISTS:
-# After indexing a repo, new joinees can ask:
-#   "How does authentication work?"
-#   "Where is the payment logic?"
-#   "What functions call the database?"
-#
-# The agent:
-#   1. Searches Qdrant for relevant code chunks
-#   2. Traces the call graph for related functions
-#   3. Sends everything to LLM with the question
-#   4. Returns an answer with file/line references
-# ============================================================
-
 from dataclasses import dataclass, field
 from src.config import get_settings
 from src.shared.llm_client import LLMClient
@@ -31,16 +15,7 @@ class QAResponse:
 
 
 class QAAgent:
-    """
-    Answers questions about an indexed codebase.
-    
-    USAGE:
-        qa = QAAgent()
-        response = qa.ask("How does user authentication work?")
-        print(response.answer)
-        for ref in response.code_references:
-            print(f"  {ref['file_path']}:{ref['start_line']} - {ref['name']}")
-    """
+    """Answers natural language questions about an indexed codebase using RAG."""
     
     def __init__(self):
         settings = get_settings()
@@ -58,18 +33,7 @@ class QAAgent:
             self.cache = None
     
     def ask(self, question: str) -> QAResponse:
-        """
-        Answer a question about the indexed codebase.
-        
-        FLOW:
-        1. Check cache (same question asked before?)
-        2. Search Qdrant for relevant code chunks
-        3. Build context from chunks + their metadata
-        4. Send question + context to LLM
-        5. Cache the answer for next time
-        6. Return answer with code references
-        """
-        # Step 1: Check cache
+        """Answer a question about the indexed codebase using RAG."""
         if self.cache:
             cached = self.cache.get("onboard_qa", question)
             if cached:
@@ -80,7 +44,6 @@ class QAAgent:
                     cached=True,
                 )
         
-        # Step 2: Search for relevant code
         try:
             results = self.vector_store.search(
                 collection=self.collection,
@@ -103,11 +66,9 @@ class QAAgent:
                 cached=False,
             )
         
-        # Step 3: Build context
         context = self._build_context(results)
         code_refs = self._extract_references(results)
         
-        # Step 4: Ask LLM
         prompt = f"""You are a codebase expert helping a new team member understand the code.
 
 QUESTION: {question}
@@ -131,7 +92,7 @@ Provide a clear, detailed answer."""
         
         answer = result["content"]
         
-        # Step 5: Cache the answer
+        # Cache the answer
         if self.cache:
             self.cache.set("onboard_qa", question, {
                 "answer": answer,

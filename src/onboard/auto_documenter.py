@@ -1,29 +1,9 @@
-# ============================================================
-# auto_documenter.py -- LLM generates summaries for code chunks
-# ============================================================
-# WHY THIS EXISTS:
-# When someone asks "What does this module do?", you need a
-# human-readable summary — not raw code.
-#
-# This runs ONCE during indexing. For each function/class,
-# the LLM generates a 1-2 sentence summary.
-# These summaries are stored alongside vectors in Qdrant.
-# ============================================================
-
 from src.shared.llm_client import LLMClient
 from src.onboard.code_chunker import CodeChunk
 
 
 class AutoDocumenter:
-    """
-    Generates documentation for code chunks using LLM.
-    
-    USAGE:
-        doc = AutoDocumenter()
-        summary = doc.summarize(chunk)
-        # Returns: "This function validates user credentials by
-        #           checking the username and password against the database."
-    """
+    """Generates LLM-powered documentation summaries for code chunks."""
     
     def __init__(self):
         self.llm = LLMClient()

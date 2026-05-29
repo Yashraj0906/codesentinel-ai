@@ -1,24 +1,7 @@
-# ============================================================
-# security_scanner.py — RAG-based security vulnerability scanner
-# ============================================================
-# HOW IT WORKS (this is your RAG pipeline):
-#
-# Step 1: Take the code being reviewed
-# Step 2: Search Qdrant for similar CWE vulnerability patterns
-#         (vector similarity search — "does this code LOOK LIKE
-#          a known vulnerability pattern?")
-# Step 3: For each match, ask LLM to CONFIRM:
-#         "Does this code actually have this vulnerability?"
-# Step 4: Only report confirmed vulnerabilities
-#
-# WHY TWO STEPS (search + confirm):
-# - Search alone: too many false positives
-#   ("this code mentions 'SELECT' so it might be SQL injection")
-# - LLM alone: too expensive, might miss things
-#   (LLM doesn't know about all 900+ CWE entries)
-# - Search + confirm: best of both worlds
-#   (cheap retrieval to narrow down, expensive LLM to verify)
-# ============================================================
+"""
+RAG-based security vulnerability scanner.
+Searches Qdrant for similar CWE patterns, then uses LLM to confirm matches.
+"""
 
 from src.review.diff_analyzer import DiffAnalysis, FunctionChange
 from src.review.bug_detector import BugReport
@@ -28,16 +11,7 @@ from src.config import get_settings
 
 
 class SecurityScanner:
-    """
-    Scans code for security vulnerabilities using RAG.
-    
-    USAGE:
-        scanner = SecurityScanner()
-        analysis = DiffAnalyzer().parse_code(some_code)
-        issues = scanner.scan(analysis)
-        for issue in issues:
-            print(f"{issue.severity}: {issue.description}")
-    """
+    """Scans code for security vulnerabilities using vector search + LLM confirmation."""
     
     def __init__(self):
         settings = get_settings()
@@ -47,37 +21,22 @@ class SecurityScanner:
         self.top_k = settings.top_k_security_results
     
     def scan(self, analysis: DiffAnalysis) -> list[BugReport]:
-        """
-        Scan all changed functions for security vulnerabilities.
-        Returns list of confirmed security issues.
-        """
+        """Scan all changed functions for security vulnerabilities."""
         all_issues = []
-        
         for func in analysis.functions_changed:
             issues = self._check_function(func)
             all_issues.extend(issues)
-        
         return all_issues
     
     def _check_function(self, func: FunctionChange) -> list[BugReport]:
-        """
-        Check one function for security vulnerabilities.
-        
-        THE RAG FLOW:
-        1. Use the function's code as the SEARCH QUERY
-        2. Qdrant finds the most similar CWE patterns
-        3. For each similar CWE, ask LLM: "Is this code actually vulnerable?"
-        4. Only report high-confidence confirmations
-        """
-        # Skip very short code (not enough to analyze)
+        """Check one function against the CWE database via RAG."""
         if len(func.code.strip()) < 20:
             return []
         
-        # Step 1: Search for similar vulnerability patterns
         try:
             similar_cwes = self.vector_store.search(
                 collection=self.collection,
-                query=func.code,        # The code itself is the search query!
+                query=func.code,
                 top_k=self.top_k,
             )
         except Exception as e:
@@ -87,13 +46,10 @@ class SecurityScanner:
         if not similar_cwes:
             return []
         
-        # Step 2: Ask LLM to confirm each potential match
         issues = []
         for cwe in similar_cwes:
-            # Skip low-similarity matches (not worth checking)
             if cwe["score"] < 0.3:
                 continue
-            
             confirmed = self._confirm_vulnerability(func, cwe)
             if confirmed:
                 issues.append(confirmed)
@@ -101,16 +57,7 @@ class SecurityScanner:
         return issues
     
     def _confirm_vulnerability(self, func: FunctionChange, cwe: dict) -> BugReport | None:
-        """
-        Ask LLM: "Does this specific code actually have this vulnerability?"
-        
-        WHY THIS STEP:
-        Vector similarity might find that code mentioning "SELECT" is
-        similar to CWE-89 (SQL injection). But the code might actually
-        use parameterized queries correctly. The LLM catches this.
-        
-        Returns BugReport if confirmed, None if false positive.
-        """
+        """Use LLM to confirm whether the code actually exhibits the vulnerability."""
         cwe_id = cwe["metadata"].get("cwe_id", "Unknown")
         cwe_text = cwe["text"]
         similarity_score = cwe["score"]
@@ -141,7 +88,7 @@ RULES:
 - Look for the SPECIFIC patterns described in the vulnerability
 - If the code uses parameterized queries, it's NOT sql injection
 - If the code properly escapes input, it's NOT xss
-- Don't flag theoretical risks — only actual vulnerable code"""
+- Don't flag theoretical risks -- only actual vulnerable code"""
         
         try:
             result = self.llm.chat_json([
@@ -151,7 +98,6 @@ RULES:
             
             parsed = result.get("parsed", {})
             
-            # Only report if LLM confirms with high confidence
             if parsed.get("is_vulnerable") and parsed.get("confidence", 0) > 0.7:
                 return BugReport(
                     bug_type=cwe_id.lower().replace("-", "_"),

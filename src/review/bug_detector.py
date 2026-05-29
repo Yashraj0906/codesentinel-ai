@@ -1,24 +1,8 @@
-# ============================================================
-# bug_detector.py — Finds bugs using patterns + LLM
-# ============================================================
-# WHY TWO LAYERS:
-# Layer 1 (Static Patterns): Catches ~60% of bugs INSTANTLY
-#   - Regex + AST checks for known bad patterns
-#   - Zero cost, zero latency
-#   - Example: f"SELECT * FROM users WHERE id = {user_id}"
-#     → SQL injection! Caught by regex in 1ms.
-#
-# Layer 2 (LLM Analysis): Catches the remaining ~40%
-#   - Complex logic errors, edge cases, race conditions
-#   - Costs money, takes 1-3 seconds
-#   - Example: off-by-one error in a loop
-#     → Patterns can't catch this. LLM reasons through the logic.
-#
-# WHY THIS MATTERS IN INTERVIEWS:
-# "I use two-layer detection. Layer 1 is free and catches most
-#  common bugs. Layer 2 uses LLM only for complex cases. This
-#  shows I understand that not everything needs an LLM."
-# ============================================================
+"""
+Two-layer bug detection: static pattern matching + LLM deep analysis.
+Layer 1 catches common vulnerabilities via regex/AST (free, instant).
+Layer 2 uses LLM for complex logic errors (paid, thorough).
+"""
 
 import ast
 import re
@@ -29,45 +13,30 @@ from src.shared.llm_client import LLMClient
 
 @dataclass
 class BugReport:
-    """
-    One detected bug/issue.
-    This is what gets shown in the review report.
-    """
-    bug_type: str              # "sql_injection", "bare_except", etc.
-    severity: str              # "critical" | "high" | "medium" | "low"
-    file_path: str             # Which file
-    line_number: int | None    # Which line (if known)
-    code_snippet: str          # The problematic code
-    description: str           # What's wrong (human-readable)
-    suggestion: str            # How to fix it
-    confidence: float          # 0.0 to 1.0 (how sure are we)
-    detection_method: str      # "static_pattern" | "llm_analysis"
+    """A single detected bug or vulnerability."""
+    bug_type: str
+    severity: str
+    file_path: str
+    line_number: int | None
+    code_snippet: str
+    description: str
+    suggestion: str
+    confidence: float
+    detection_method: str
 
 
 class BugDetector:
-    """
-    Detects bugs using static patterns + LLM analysis.
-    
-    USAGE:
-        detector = BugDetector()
-        analysis = DiffAnalyzer().parse_code("def get_user(id): ...")
-        bugs = detector.detect(analysis)
-        for bug in bugs:
-            print(f"{bug.severity}: {bug.description}")
-    """
+    """Detects bugs using static patterns (Layer 1) and LLM analysis (Layer 2)."""
     
     def __init__(self):
         self.llm = LLMClient()
     
     def detect(self, analysis: DiffAnalysis) -> list[BugReport]:
-        """
-        Run ALL detection methods on the changed code.
-        Returns combined list of all bugs found.
-        """
+        """Run all detection methods on changed code and return combined bug list."""
         all_bugs = []
         
         for func in analysis.functions_changed:
-            # ── Layer 1: Static patterns (fast, free) ──
+            # Layer 1: static patterns (fast, free)
             all_bugs.extend(self._check_sql_injection(func))
             all_bugs.extend(self._check_mutable_default(func))
             all_bugs.extend(self._check_bare_except(func))
@@ -75,45 +44,29 @@ class BugDetector:
             all_bugs.extend(self._check_resource_leak(func))
             all_bugs.extend(self._check_dangerous_functions(func))
             
-            # ── Layer 2: LLM deep analysis (complex bugs) ──
+            # Layer 2: LLM deep analysis (complex bugs)
             llm_bugs = self._llm_deep_analysis(func)
             all_bugs.extend(llm_bugs)
         
-        # Remove duplicates (LLM might catch same bug as a pattern)
         return self._deduplicate(all_bugs)
     
-    # ====================================================
-    # LAYER 1: STATIC PATTERN DETECTORS
-    # Each method checks for ONE specific type of bug.
-    # They use regex (text pattern matching) and AST (code structure).
-    # ====================================================
+    # --- Layer 1: Static Pattern Detectors ---
     
     def _check_sql_injection(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: Finds SQL queries built with string formatting.
-        WHY DANGEROUS: Attacker can input malicious SQL.
-        
-        BAD:  f"SELECT * FROM users WHERE id = {user_id}"
-        GOOD: cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-        """
+        """Detect SQL queries built with string formatting (CWE-89)."""
         bugs = []
         code = func.code
         
-        # Pattern: f-string containing SQL keywords + {variable}
         sql_fstring = re.findall(
-            r'f["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\b.*?\{.*?\}.*?["\']',
+            r'f["\'"](?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\b.*?\{.*?\}.*?["\'"]',
             code, re.IGNORECASE
         )
-        
-        # Pattern: "SQL..." .format(...)
         sql_format = re.findall(
-            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\b.*?\{\}.*?["\']\.format',
+            r'["\'"](?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\b.*?\{\}.*?["\'"]\. format',
             code, re.IGNORECASE
         )
-        
-        # Pattern: "SQL..." + variable (string concatenation)
         sql_concat = re.findall(
-            r'["\'](?:SELECT|INSERT|UPDATE|DELETE)\b.*?["\']\s*\+',
+            r'["\'"](?:SELECT|INSERT|UPDATE|DELETE)\b.*?["\'"]\\s*\\+',
             code, re.IGNORECASE
         )
         
@@ -133,14 +86,7 @@ class BugDetector:
         return bugs
     
     def _check_mutable_default(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: Mutable objects (list, dict) as default function arguments.
-        WHY DANGEROUS: The default is shared across ALL calls.
-        
-        BAD:  def add_item(item, items=[]):     # Same list for every call!
-        GOOD: def add_item(item, items=None):
-                  items = items or []
-        """
+        """Detect mutable default arguments (list, dict, set)."""
         bugs = []
         try:
             tree = ast.parse(func.code)
@@ -165,16 +111,7 @@ class BugDetector:
         return bugs
     
     def _check_bare_except(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: except: without specifying what exception to catch.
-        WHY DANGEROUS: Catches EVERYTHING — including KeyboardInterrupt
-          and SystemExit. Makes debugging impossible.
-        
-        BAD:  except:
-                  pass
-        GOOD: except ValueError as e:
-                  logger.error(f"Failed: {e}")
-        """
+        """Detect bare except clauses and swallowed exceptions (CWE-396)."""
         bugs = []
         try:
             tree = ast.parse(func.code)
@@ -183,7 +120,6 @@ class BugDetector:
         
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                # Bare except (no exception type specified)
                 if node.type is None:
                     bugs.append(BugReport(
                         bug_type="bare_except",
@@ -197,7 +133,6 @@ class BugDetector:
                         detection_method="static_pattern",
                     ))
                 
-                # Swallowed exception (except ... pass)
                 if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
                     bugs.append(BugReport(
                         bug_type="swallowed_exception",
@@ -213,23 +148,14 @@ class BugDetector:
         return bugs
     
     def _check_hardcoded_secrets(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: API keys, passwords hardcoded in source code.
-        WHY DANGEROUS: Anyone who sees your code (GitHub) gets your keys.
-        
-        BAD:  API_KEY = "sk-1234567890abcdef"
-        GOOD: API_KEY = os.environ.get("API_KEY")
-        """
+        """Detect hardcoded passwords, API keys, and tokens (CWE-798)."""
         bugs = []
         code = func.code
         
-        # Pattern: secret-like variable name = "string value"
         secret_patterns = re.findall(
             r'(?:password|passwd|secret|api_key|apikey|token|auth_token|access_key|private_key)\s*=\s*["\'][^"\']+["\']',
             code, re.IGNORECASE
         )
-        
-        # Pattern: AWS access key format
         aws_keys = re.findall(r'AKIA[0-9A-Z]{16}', code)
         
         for match in secret_patterns + aws_keys:
@@ -248,14 +174,7 @@ class BugDetector:
         return bugs
     
     def _check_resource_leak(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: Files opened without 'with' statement.
-        WHY DANGEROUS: If an exception occurs, the file never gets closed.
-          Open too many files → your program crashes.
-        
-        BAD:  f = open("data.txt")
-        GOOD: with open("data.txt") as f:
-        """
+        """Detect files opened without context manager (CWE-404)."""
         bugs = []
         lines = func.code.split("\n")
         
@@ -278,13 +197,7 @@ class BugDetector:
         return bugs
     
     def _check_dangerous_functions(self, func: FunctionChange) -> list[BugReport]:
-        """
-        WHAT: Functions that execute arbitrary code/commands.
-        WHY DANGEROUS: If user input reaches these, attacker controls your server.
-        
-        BAD:  os.system(f"ping {user_input}")
-        BAD:  eval(user_expression)
-        """
+        """Detect os.system(), eval(), exec(), pickle.load() and similar (CWE-78, CWE-94)."""
         bugs = []
         code = func.code
         
@@ -320,23 +233,10 @@ class BugDetector:
         
         return bugs
     
-    # ====================================================
-    # LAYER 2: LLM DEEP ANALYSIS
-    # For complex bugs that patterns can't catch.
-    # ====================================================
+    # --- Layer 2: LLM Deep Analysis ---
     
     def _llm_deep_analysis(self, func: FunctionChange) -> list[BugReport]:
-        """
-        Use LLM to find complex bugs:
-        - Off-by-one errors
-        - Wrong conditions in if statements
-        - Missing edge cases (empty input, None, overflow)
-        - Race conditions
-        - N+1 query problems
-        
-        These are impossible to catch with regex/AST.
-        """
-        # Skip tiny functions (not enough code to analyze)
+        """Use LLM to find complex bugs: logic errors, edge cases, race conditions."""
         if len(func.code.strip()) < 30:
             return []
         
@@ -384,7 +284,7 @@ IMPORTANT RULES:
             
             bugs = []
             for bug in result.get("parsed", {}).get("bugs", []):
-                if bug.get("confidence", 0) > 0.7:  # Only report high-confidence bugs
+                if bug.get("confidence", 0) > 0.7:
                     bugs.append(BugReport(
                         bug_type=bug.get("bug_type", "logic_error"),
                         severity=bug.get("severity", "medium"),
@@ -404,10 +304,7 @@ IMPORTANT RULES:
             return []
     
     def _deduplicate(self, bugs: list[BugReport]) -> list[BugReport]:
-        """
-        Remove duplicate bugs (same type + same line).
-        LLM might catch the same bug that a static pattern already found.
-        """
+        """Remove duplicate bugs (same type + same file + same line)."""
         seen = set()
         unique = []
         for bug in bugs:

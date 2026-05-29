@@ -1,10 +1,3 @@
-# ============================================================
-# report_generator.py — Builds the final review report
-# ============================================================
-# Takes all results (bugs, fixes, test results, costs) and
-# produces a structured report in JSON and Markdown format.
-# ============================================================
-
 from dataclasses import dataclass
 from datetime import datetime
 from src.review.diff_analyzer import DiffAnalysis
