@@ -60,10 +60,18 @@ class CodeReviewPipeline:
         print("[5/6] Testing fixes with self-healing...")
         heal_results = []
         for i, fix in enumerate(fixes):
-            if fix.fixed_code:  # Only test if we have a fix
+            if fix.fixed_code:
                 print(f"   Testing fix {i+1}/{len(fixes)}: {fix.bug.bug_type}")
-                result = self.test_runner.run_with_self_heal(fix, code)
-                heal_results.append(result)
+                try:
+                    result = self.test_runner.run_with_self_heal(fix, code)
+                    heal_results.append(result)
+                except Exception as e:
+                    print(f"   [WARN] Self-heal failed for {fix.bug.bug_type}: {e}")
+                    from src.review.test_runner import SelfHealResult
+                    heal_results.append(SelfHealResult(
+                        success=False, final_fix=fix, attempts=0,
+                        test_results=[], heal_log=[f"Self-heal error: {e}"]
+                    ))
             else:
                 # No fix generated — create a dummy result
                 from src.review.test_runner import SelfHealResult
@@ -108,8 +116,16 @@ class CodeReviewPipeline:
         heal_results = []
         for fix in fixes:
             if fix.fixed_code:
-                result = self.test_runner.run_with_self_heal(fix, diff_text)
-                heal_results.append(result)
+                try:
+                    result = self.test_runner.run_with_self_heal(fix, diff_text)
+                    heal_results.append(result)
+                except Exception as e:
+                    print(f"   [WARN] Self-heal failed: {e}")
+                    from src.review.test_runner import SelfHealResult
+                    heal_results.append(SelfHealResult(
+                        success=False, final_fix=fix, attempts=0,
+                        test_results=[], heal_log=[f"Self-heal error: {e}"]
+                    ))
             else:
                 from src.review.test_runner import SelfHealResult
                 heal_results.append(SelfHealResult(

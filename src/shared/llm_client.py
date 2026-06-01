@@ -47,6 +47,9 @@ class LLMClient:
         try:
             response = self.client.chat.completions.create(**kwargs)
         except Exception as e:
+            error_str = str(e)
+            if "400" in error_str or "json_validate_failed" in error_str:
+                raise
             print(f"[WARN] LLM call failed: {e}. Retrying in 1s...")
             time.sleep(1)
             response = self.client.chat.completions.create(**kwargs)

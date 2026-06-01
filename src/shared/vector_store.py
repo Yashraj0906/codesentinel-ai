@@ -40,6 +40,21 @@ class VectorStore:
         else:
             print(f"[i] Collection '{name}' already exists, skipping")
     
+    def recreate_collection(self, name: str, dimension: int = 384):
+        """Delete and recreate collection to clear old data."""
+        collections = [c.name for c in self.client.get_collections().collections]
+        if name in collections:
+            self.client.delete_collection(collection_name=name)
+            print(f"[OK] Deleted old collection: {name}")
+        self.client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(
+                size=dimension,
+                distance=Distance.COSINE,
+            ),
+        )
+        print(f"[OK] Created fresh collection: {name}")
+    
     def upsert(self, collection: str, documents: list[dict]):
         """Insert or update documents. Each doc needs 'id', 'text', and 'metadata' keys."""
         texts = [doc["text"] for doc in documents]

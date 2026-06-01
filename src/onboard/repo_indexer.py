@@ -97,8 +97,8 @@ class RepoIndexer:
         """
         settings = get_settings()
         
-        # Create collection if not exists
-        self.vector_store.create_collection(
+        # Clear old data and create fresh collection
+        self.vector_store.recreate_collection(
             self.collection,
             dimension=settings.embedding_dimension,
         )
