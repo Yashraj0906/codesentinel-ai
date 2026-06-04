@@ -1,6 +1,7 @@
 import streamlit as st
 import httpx
 import time
+import os
 
 # Page config
 st.set_page_config(
@@ -10,8 +11,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# API base URL
-API_URL = "http://localhost:8000"
+# API base URL — reads from env var for cloud deployment, defaults to localhost
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 # ── Custom CSS for premium look ──
 st.markdown("""

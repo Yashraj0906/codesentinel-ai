@@ -1,0 +1,12 @@
+groq
+python-dotenv
+pydantic-settings
+unidiff
+sentence-transformers
+qdrant-client
+fastapi
+uvicorn[standard]
+redis
+streamlit
+gitpython
+httpx

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
     qdrant_collection_cve: str = "cve_vulnerabilities"
     qdrant_collection_code: str = "codebase_chunks"
     

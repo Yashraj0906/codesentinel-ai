@@ -22,7 +22,10 @@ class VectorStore:
     
     def __init__(self):
         settings = get_settings()
-        self.client = QdrantClient(url=settings.qdrant_url)
+        kwargs = {"url": settings.qdrant_url}
+        if settings.qdrant_api_key:
+            kwargs["api_key"] = settings.qdrant_api_key
+        self.client = QdrantClient(**kwargs)
         self.embedder = EmbeddingService()
     
     def create_collection(self, name: str, dimension: int = 384):

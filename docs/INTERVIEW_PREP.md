@@ -529,3 +529,238 @@ FULL FORMS:
 
 > [!IMPORTANT]
 > **Before every interview, read through the Quick Reference Card 3 times.** That's all you need to remember. Everything else you can derive from understanding the pipeline.
+
+---
+---
+
+# 🤖 YashGPT — LLM Fine-Tuning Interview Prep
+
+> **Project:** YashGPT — Fine-Tuned LLM for YouTube Comment Responses
+> **Tech:** Mistral-7B, LoRA/PEFT, GPTQ, BitsAndBytes, HuggingFace, PyTorch
+> **GitHub:** https://github.com/Yashraj0906/YashGPT
+
+---
+
+## 💡 Why I Built This (MOTIVATION STORY — say this first)
+
+> "I noticed that data science YouTubers get hundreds of comments on every video — questions, feedback, requests for help. But most YouTubers can't reply to everyone. I thought: what if I fine-tune an LLM to replicate a YouTuber's response style? So I created YashGPT — a virtual data science consultant that takes YouTube comments and generates personalized replies in a consistent tone, ending with a signature '–YashGPT'. The real technical challenge was: how do you fine-tune a 7-billion parameter model when you only have a free Google Colab GPU with 16GB VRAM?"
+
+**Why this story works in interviews:**
+- Shows you identified a **real-world problem** (not just "I wanted to learn LLMs")
+- Immediately frames the **technical challenge** (7B model on 16GB GPU)
+- Makes the interviewer curious — "so how DID you do it?"
+
+---
+
+## 🎯 The 30-Second Pitch
+
+> "I fine-tuned Mistral-7B-Instruct to create YashGPT — a virtual data science consultant that replies to YouTube comments. The challenge was fitting a 7-billion parameter model on a free Colab T4 with 16GB VRAM. I used GPTQ 4-bit quantization to compress the model from 14GB to 4GB, then LoRA to train only 0.79% of parameters — about 2.1 million out of 264 million. Training ran for 10 epochs, reducing validation loss by 63%. The adapter is only 8MB and deployed on HuggingFace Hub."
+
+---
+
+## 🏗️ Architecture — How It Works
+
+```
+┌─────────────────────────────────────────────────┐
+│  Base Model: Mistral-7B-Instruct-v0.2 (FROZEN)  │
+│  264M parameters — GPTQ 4-bit quantized          │
+│                                                   │
+│  ┌─────────────────────────────────────────────┐ │
+│  │  LoRA Adapter (TRAINED)                      │ │
+│  │  Target: q_proj (query projection)           │ │
+│  │  Rank: 8, Alpha: 32                          │ │
+│  │  Parameters: 2.1M (0.79% of total)           │ │
+│  └─────────────────────────────────────────────┘ │
+│                                                   │
+│  Input:  [INST] {system_message}\n{comment} [/INST]│
+│  Output: Personalized reply ending with –YashGPT  │
+└─────────────────────────────────────────────────┘
+```
+
+### Training Flow
+1. **Load base model** — GPTQ-quantized Mistral-7B (4-bit, ~4GB VRAM)
+2. **Freeze all weights** — base model stays untouched
+3. **Inject LoRA adapters** — small trainable matrices into `q_proj` layers
+4. **Train on custom dataset** — 50 YouTube comment→reply pairs
+5. **Push adapter to HuggingFace** — only ~8MB (not the full 4GB model)
+
+### Inference Flow
+1. **Load base model** — BitsAndBytes NF4 quantization
+2. **Load LoRA adapter** — from HuggingFace
+3. **Merge weights** — adapter modifies attention behavior
+4. **Generate** — `model.generate(max_new_tokens=150, temperature=0.7)`
+
+---
+
+## 🔑 Key Concepts — Know These
+
+### LoRA (Low-Rank Adaptation)
+> "Instead of updating all 264M parameters, LoRA freezes the entire model and injects small trainable matrices into specific attention layers. Only these small matrices are trained."
+
+```
+Original:  y = W · x           (W is huge, frozen)
+LoRA:      y = W · x + B·A · x  (A and B are tiny, trainable)
+```
+
+### LoRA Hyperparameters
+
+| Parameter | Value | What It Means |
+|-----------|-------|---------------|
+| `r=8` | Rank of matrices | Lower = fewer params. 8 is standard starting point |
+| `lora_alpha=32` | Scaling factor | `alpha/r = 32/8 = 4x` scaling of LoRA influence |
+| `target_modules=["q_proj"]` | Which layers | Only query projection in attention |
+| `lora_dropout=0.05` | Regularization | Prevents overfitting on small dataset |
+
+### GPTQ vs BitsAndBytes
+
+| | GPTQ | BitsAndBytes NF4 |
+|---|---|---|
+| When | Pre-quantized (download ready) | Quantize on load |
+| Used for | Training (finetuning notebook) | Inference (inference notebook) |
+| Speed | Faster inference | Slightly slower |
+
+> "I used GPTQ for training because TheBloke provides pre-quantized checkpoints. For inference, I used BitsAndBytes NF4 because it's simpler — just set `load_in_4bit=True`."
+
+### Gradient Checkpointing
+> "Saves memory by recomputing activations during backward pass instead of storing them all. Trades compute time for VRAM — critical on a 16GB GPU."
+
+### Paged AdamW 8-bit
+> "Standard optimizer stores momentum in FP32 (~2GB for 264M params). Paged AdamW 8-bit stores in INT8 (halves memory) and pages unused states to CPU RAM."
+
+---
+
+## 📊 Training Results
+
+| Epoch | Train Loss | Val Loss |
+|:-----:|:----------:|:--------:|
+| 1     | 4.14       | 3.72     |
+| 5     | 2.07       | 1.85     |
+| 10    | 1.21       | 1.39     |
+
+- **Val loss:** 3.72 → 1.39 (63% decrease)
+- **No significant overfitting** — val loss keeps decreasing
+- **Dataset:** 50 training + 9 test examples
+- **Hosted on:** HuggingFace Datasets
+
+---
+
+## 🎤 YashGPT Interview Q&A
+
+### "Why did you build this?"
+> "YouTubers get hundreds of comments and can't reply to all of them. I wanted to see if I could fine-tune an LLM to replicate a consultant-style response — concise, helpful, personality-driven. It was also a way to learn parameter-efficient fine-tuning on consumer hardware."
+
+### "Why LoRA instead of full fine-tuning?"
+> "Three reasons: (1) **Memory** — full fine-tuning needs ~112GB VRAM, LoRA needs <8GB. (2) **Speed** — training 2.1M params is ~100x faster than 264M. (3) **Storage** — the adapter is 8MB vs 14GB for a full model."
+
+### "Why Mistral-7B?"
+> "Best quality-to-size ratio. Mistral-7B outperforms Llama-2-13B despite being half the size. The instruct variant has built-in instruction-following. TheBloke provides GPTQ-quantized versions ready for fine-tuning."
+
+### "50 examples? Isn't that too small?"
+> "For full fine-tuning, yes. But LoRA works differently — the base model already understands language, I'm only teaching it a style. 50 examples are enough to learn the YashGPT persona — concise replies, signature sign-off, tone matching. The 63% val loss drop confirms learning. With 1000+ examples, quality would improve further."
+
+### "What is r=8? What if you increase it?"
+> "r is the rank — it determines the size of LoRA matrices. Higher r = more capacity but more parameters and overfitting risk. With only 50 examples, r=8 is the standard balance between capacity and regularization."
+
+### "How do you evaluate the model?"
+> "Currently I use training/validation loss, which shows the model is learning. For proper evaluation, I'd add: human evaluation for tone/relevance, BLEU/ROUGE scores against reference replies, and A/B testing between base model vs fine-tuned responses."
+
+### "Is there overfitting?"
+> "Minimal. Train loss is 1.21, val loss is 1.39 — small gap. Val loss was still decreasing at epoch 10. The dropout=0.05 and weight_decay=0.01 help with regularization."
+
+### "What would you improve?"
+> "(1) More data — 500+ examples. (2) Target more modules — add v_proj, k_proj. (3) DPO/RLHF for human preference alignment. (4) Proper evaluation metrics — BLEU, ROUGE, human eval."
+
+---
+
+## 🚀 YashGPT Quick Reference
+
+```
+YashGPT = Fine-tuned Mistral-7B for YouTube comment replies
+Motivation = YouTubers can't reply to everyone → AI assistant
+
+TRAINING:
+  Base model     = Mistral-7B-Instruct-v0.2 (GPTQ 4-bit by TheBloke)
+  Method         = LoRA (Low-Rank Adaptation)
+  Trainable      = 2.1M out of 264M params (0.79%)
+  LoRA rank      = 8, alpha = 32, target = q_proj
+  Dataset        = 50 train + 9 test (custom YouTube comments)
+  Epochs         = 10
+  Val loss       = 3.72 → 1.39 (63% decrease)
+  Optimizer      = Paged AdamW 8-bit
+  GPU            = Tesla T4 (16GB, Colab free)
+  Adapter size   = ~8MB
+
+INFERENCE:
+  Quantization   = BitsAndBytes NF4 (load_in_4bit=True)
+  Adapter        = From HuggingFace Hub
+  Prompt format  = [INST] {system_message}\n{comment}\n[/INST]
+
+KEY DECISIONS:
+  LoRA over full fine-tuning  → 8GB vs 112GB VRAM
+  GPTQ for training           → Pre-quantized, fast
+  BitsAndBytes for inference   → Simpler, no compilation
+  q_proj only                  → Prevents overfitting on 50 examples
+  Gradient checkpointing       → Trades compute for memory
+```
+
+---
+---
+
+# 🎙️ HOW TO INTRODUCE YOURSELF IN THE INTERVIEW
+
+## The Opening (when they say "tell me about yourself")
+
+> "Hi, I'm Yashraj. I'm a final year B.Tech ECE student, and I've been focused on AI/ML — specifically NLP and LLMs. I've built two projects that I'm really passionate about.
+>
+> The first is **YashGPT** — I noticed that data science YouTubers get hundreds of comments but can't reply to everyone. So I fine-tuned Mistral-7B using LoRA to create a virtual consultant that generates personalized replies. The challenge was fitting a 7-billion parameter model on a free Colab T4 with 16GB VRAM — I solved it using GPTQ quantization and LoRA to train only 0.79% of the parameters.
+>
+> The second is **CodeSentinel AI** — an AI-powered code review platform. It detects bugs using a two-layer approach — static patterns for known vulnerabilities plus LLM for complex logic errors — scans for security issues using RAG on a CWE database, generates auto-fixes, and tests them with a self-healing retry loop. It also has a codebase onboarding module where new developers can ask questions in English and get answers with exact file and line references.
+>
+> Both projects gave me hands-on experience with RAG pipelines, prompt engineering, LLM APIs, vector databases, and building production-ready Python applications."
+
+**Why this works:**
+- ✅ Starts with WHO you are (1 sentence)
+- ✅ Shows MOTIVATION for each project (real problems, not "I wanted to learn")
+- ✅ Highlights TECHNICAL DEPTH (quantization, LoRA, RAG, self-healing)
+- ✅ Ends with a SKILL SUMMARY (connects to what they're hiring for)
+
+---
+
+## How to Transition Between Projects
+
+If they ask about one project and you want to connect it to the other:
+
+> "This is actually related to my other project too — in CodeSentinel I used RAG for security scanning, and in YashGPT I worked with the model training side. Together, these projects cover both ends of the LLM pipeline — fine-tuning models AND building applications on top of them."
+
+---
+
+## When They Ask "Why This Project?"
+
+### For YashGPT:
+> "I was watching a data science YouTuber and noticed they had 500+ unanswered comments. Viewers were asking genuine questions but getting no response. I thought — what if the YouTuber's response style could be replicated by an AI? That's a fine-tuning problem. The real challenge wasn't the idea — it was doing it on free hardware with limited data."
+
+### For CodeSentinel:
+> "In my college projects and internships, I saw that code reviews were either skipped entirely or done superficially because they take too long. Senior developers don't have 30 minutes for every PR. I wanted to automate the routine checks — common bugs, security vulnerabilities — so humans can focus on logic and architecture. The onboarding module came from my own experience joining new codebases — it takes weeks to understand someone else's code."
+
+---
+
+## Connecting Projects to the Job
+
+### For an NLP/LLM role (like Trovex):
+> "YashGPT gave me experience with model training — LoRA, quantization, HuggingFace, PyTorch. CodeSentinel gave me experience with model deployment — RAG pipelines, prompt engineering, vector databases, API development. Together, I understand the full LLM lifecycle from training to production."
+
+### For an AI automation role (like Lokal):
+> "Both projects demonstrate AI automation — YashGPT automates YouTube comment responses, CodeSentinel automates code reviews. I'm comfortable with LLM APIs, prompt engineering, and building end-to-end pipelines."
+
+---
+
+## ⚡ Things to NEVER say in an interview:
+
+| ❌ Don't say | ✅ Say instead |
+|---|---|
+| "I just followed a tutorial" | "I built it from scratch, making design decisions at each step" |
+| "I don't know" (and stop) | "I haven't implemented that yet, but my approach would be..." |
+| "It works for all languages" | "Currently Python-focused, but the LLM layer is language-agnostic. I've planned tree-sitter for multi-language support" |
+| "I used PostgreSQL" (it's unused) | "I set up PostgreSQL infrastructure for future features like user auth and review history" |
+| "The dataset was from an API" | "I curated the dataset manually using GPT to generate consultant-style responses" |
+| "I don't remember the number" | Memorize: 0.79%, 63%, 384-dim, 6 detectors, 10 CWEs, 3 retries |
