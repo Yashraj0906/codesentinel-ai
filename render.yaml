@@ -1,17 +1,71 @@
+# ============================================================
+# render.yaml -- Render Blueprint for one-click deployment
+# ============================================================
+# Deploy: Push to GitHub, then go to https://dashboard.render.com
+# Click "New" > "Blueprint" > connect your GitHub repo.
+# Render reads this file automatically.
+# ============================================================
+
 services:
+  # ── FastAPI Backend ──
   - type: web
     name: codesentinel-api
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn src.api.main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: bash scripts/render_start.sh
     envVars:
       - key: GROQ_API_KEY
-        sync: false
+        sync: false  # You'll set this manually in the Render dashboard
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
       - key: QDRANT_URL
-        sync: false
-      - key: QDRANT_API_KEY
-        sync: false
+        sync: false  # Set to your Qdrant Cloud URL
       - key: REDIS_URL
-        sync: false
-      - key: PYTHON_VERSION
-        value: "3.11.0"
+        fromService:
+          name: codesentinel-redis
+          type: redis
+          property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: codesentinel-db
+          property: connectionString
+      - key: PORT
+        value: "8000"
+    plan: free
+
+  # ── Streamlit Frontend ──
+  - type: web
+    name: codesentinel-ui
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: streamlit run ui/streamlit_app.py --server.port ${PORT:-8501} --server.address 0.0.0.0
+    envVars:
+      - key: API_URL
+        value: https://codesentinel-api.onrender.com
+      - key: PORT
+        value: "8501"
+    plan: free
+
+databases:
+  - name: codesentinel-db
+    plan: free
+    databaseName: codesentinel
+    user: codesentinel
+
+# ============================================================
+# MANUAL STEPS (after deploying the Blueprint):
+#
+# 1. REDIS: Go to Render Dashboard > New > Redis > Create
+#    - Name: codesentinel-redis
+#    - Plan: Free
+#    - Copy the connection string to the API service's REDIS_URL
+#
+# 2. QDRANT: Sign up at https://cloud.qdrant.io
+#    - Create a free cluster (1GB)
+#    - Copy the URL to the API service's QDRANT_URL
+#
+# 3. GROQ_API_KEY: Set your Groq API key in the API service env vars
+#
+# 4. API_URL: After the API deploys, copy its URL and set it
+#    as API_URL in the UI service's environment variables
+# ============================================================

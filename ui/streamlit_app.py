@@ -11,8 +11,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# API base URL — reads from env var for cloud deployment, defaults to localhost
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+# API base URL -- reads from environment variable in production, falls back to localhost
+API_URL = os.environ.get("API_URL", "http://localhost:8000").rstrip("/")
 
 # ── Custom CSS for premium look ──
 st.markdown("""
